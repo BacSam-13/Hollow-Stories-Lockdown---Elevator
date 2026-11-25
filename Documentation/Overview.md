@@ -1,125 +1,176 @@
-The porpouse of this project, was to implement an asset intentend to be interactive with the player, while it displays animations, being able to be used in Level Sequences, and allow
-the player to move among levels.
+# Interactive Elevator System
 
-I am going to approach the process to implement this idea, with an already existing mesh for an elevator.
+The purpose of this project was to implement an interactive elevator asset that displays animations, can be used within Level Sequences, and allows the player to travel between levels.
 
-# Usage of already existing assets
-First of all, it is neceesary to mention which elements were used, that were already made inside "Hollow Sense".
-  - Actor Component: InteractableDoor
-  - BP: InteractableObject
+To achieve this, we used an existing elevator mesh and integrated it with previously developed interaction systems. The following sections explain the implementation process and how the different components work together.
 
-These components, were originally designed to allow the player to interact with doors and move to a designed level; and interact with an object, giving
-different effects, depending of the object itself.
+# Usage of Existing Assets
 
-They were used for the next porpouses:
-  - InteractableDoor: Give the player the option to interact inside the elevator, and move to a designed level.
-  - InteractableObject: Allows the player to interact with the elevator from the outside, and opening it´s doors.
+First, let's identify the existing elements from *Hollow Sense* that were reused in this project:
 
-Now, it is neccesary to mention that, for the proper operation of the asset, it is required to use some animations, opening and closing
-the doors of the elevator.
-These animations are already implemented in the asset, so, for future explanations, we will refer to them such as: Anim_Open_Door and Anim_Close_Door.
+- **Actor Component:** `InteractableDoor`
+- **Blueprint:** `InteractableObject`
 
-These animations help to give the player a better inmersion on the elevator´s operation. And for such, we need to define where and when this animations
-will be displayed, along to when and where, the already mentioned assets can be used by the player.
+These elements were originally designed to allow the player to interact with doors, travel to a designated level, and interact with objects that trigger different effects depending on their functionality.
+
+For this project, they were used for the following purposes:
+
+- **InteractableDoor:** Gives the player the option to interact with the elevator's interior control panel and travel to a designated level.
+- **InteractableObject:** Allows the player to interact with the elevator from the outside, triggering its doors to open. Once activated, it becomes unavailable until the doors finish closing.
+
+## Door Animations
+
+For the elevator to operate properly, we needed animations to control the opening and closing of its doors.
+
+These animations were already implemented in the asset. For the following explanations, we will refer to them as:
+
+- `Anim_Open_Door`
+- `Anim_Close_Door`
+
+These animations provide visual feedback for the elevator's operation. We therefore needed to define when they should play and under which circumstances the player should be allowed to interact with the elevator.
 
 # Box Collisions
-The main rules of the asset can be described below:
-  - If the player is outside the elevator, the doors can be opened.
-  - If the player is inside the elevator, they can move into a different level.
-  - If the player leaves the elevator, the doors will close.
-  - If the doors are moving, the player can´t interact with the outside of the elevator.
-  - If the doors are opened, they can be opened again.
 
-These ideas will be implemented using Box Collisions. This way, the assets know where the player is, in which context, and what they can do.
+The elevator's behavior is governed by the following rules:
+
+- If the player is outside the elevator, they can interact with it to open the doors.
+- If the player is inside the elevator, they can use the control panel to travel to another level.
+- If the player leaves the elevator, its doors should close.
+- While the doors are moving, the player cannot interact with the elevator from the outside.
+- If the player is within the designated area, the doors should remain open.
+
+To implement these rules, we used Box Collision components. These allow the elevator to detect the player's position and determine which interactions should be available.
+
 We created two Box Collisions:
-  - Box_KeepOpen: Covers the inside of the elevator and near outside. It keeps the doors opened, if they were already opened.
-  - Box_Interact_Botonera_Int: Inside the elevator, allows to interact with "InteractableDoor".
 
-# Cases
-Now that we have the box collisions to work with, we need to define what to do in different cases. This will give
-the asset enough information to know when keep the doors opened, let the player interact with some componentns, etc...
+- **Box_KeepOpen:** Covers the elevator's interior and a nearby area outside it. It keeps the doors open if the player is within this area and the doors are already open.
+- **Box_Interact_Botonera_Int:** Covers the elevator's interior control panel area. It detects when the player enters or leaves the area where `InteractableDoor` can be used.
 
-But first, we need to define some variables that will be required during all the cases:
+# Elevator Behavior
+
+Now that we have defined the collision areas, we can explore how the elevator behaves in different situations.
+
+Before examining each case, let's define the variables used throughout the system:
+
 ```text
 CanInteract = true
 KeepOpen = false
 IsOpen = false
 ```
 
+- `CanInteract`: Determines whether the player can interact with `InteractableObject`.
+- `KeepOpen`: Indicates whether the elevator doors should remain open after the opening sequence. This value may be used by the overlap events while the doors are opening, and even be modified by them.
+- `IsOpen`: Tracks whether the elevator's doors are currently considered open.
+
 ## Begin Play
+
 ### Explanation
-Once we start the game, we allow the player to interact with InteractableObject, and by how it is defined, it can be only done from the outside.
-We also, turn off and on the collisions from Box_Interact_Botonera_Int, allowing the game to detect early if ther player spawned inside the elevator, and open the doors for
-them.
+
+When the game starts, we allow the player to interact with `InteractableObject`, which is intended to be used from outside the elevator.
+
+We also temporarily disable the collision of `Box_Interact_Botonera_Int` and re-enable it on the next tick. This allows the system to detect whether the player spawned inside the elevator and handle that situation accordingly.
+
 ```text
 SET InteractableObject.CanInteract = CanInteract
+
 DISABLE Box_Interact_Botonera_Int.Collisions
 DELAY UNTIL NEXT TICK
 ENABLE Box_Interact_Botonera_Int.Collisions
 ```
 
 ## Doors Closing
+
 ### Explanation
-This case is when the elevator is starting to get it´s doors closed. And once they are closed, allowing the player to interact with InteractanleObject.
+
+This case handles the elevator's closing sequence.
+
+Once the closing animation finishes, the system allows the player to interact with `InteractableObject` again, enabling them to open the elevator from outside.
+
 ```text
 SET IsOpen = false
 PLAY Anim_Close_Door
-SET InteractableObject.CanInteract = true
+
+WHEN Anim_Close_Door FINISHES:
+    SET InteractableObject.CanInteract = true
 ```
 
 ## Doors Opening
+
 ### Explanation
-This case is when the elevator is starting to get it´s doors opened. And once they are opened, check if they should stay opened.
+
+This case handles the elevator's opening sequence.
+
+We update the elevator's state, play the opening animation, and check whether the doors should remain open or start closing again.
+
+While the doors are moving, outside interaction remains disabled.
+
 ```text
+SET InteractableObject.CanInteract = false
 SET KeepOpen = true
 SET IsOpen = true
+
 PLAY Anim_Open_Door
-IF KeepOpen:
-    KeepOpen = false
-ELSE:
-    CALL CASE Doors Closing
-END IF
-END ELSE
+
+WHEN Anim_Open_Door FINISHES:
+    IF KeepOpen:
+        SET KeepOpen = false
+    ELSE:
+        CALL CASE Doors Closing
+    END IF
 ```
 
 ## Box_KeepOpen Begin Overlap with Player
+
 ### Explanation
-If the player is inside this area while the doors are opening, it keeps them opened.
+
+If the player enters this area while the doors are open or opening, the system marks the elevator as needing to remain open.
+
 ```text
 IF IsOpen:
     SET KeepOpen = true
-ENF IF
+END IF
 ```
 
 ## Box_KeepOpen End Overlap with Player
+
 ### Explanation
-If the player leaves this area, and the doors doesn´t have to keep open, they close.
+
+When the player leaves this area, the system checks whether the doors should remain open.
+
+If `KeepOpen` is true, the flag is reset. Otherwise, the elevator starts its closing sequence.
+
 ```text
 IF IsOpen:
     IF KeepOpen:
         SET KeepOpen = false
     ELSE:
         CALL CASE Doors Closing
-    END ELSE
     END IF
+END IF
 ```
 
 ## Box_Interact_Botonera_Int Begin Overlap with Player
+
 ### Explanation
-It allows the player to interact with the elevator, and move into a different level, and in case the player
-spawned inside the elevator, it opens the doors for them.
+
+When the player enters the elevator's interior control panel area, the system allows them to use `InteractableDoor` and travel to another level.
+
+If the player spawned inside the elevator, this event also handles opening the doors for them.
+
 ```text
 IF KeepOpen:
     SET InteractableDoor.CanInteract = true
 ELSE:
     CALL CASE Doors Opening
-END ELSE
 END IF
 ```
 
 ## Box_Interact_Botonera_Int End Overlap with Player
+
 ### Explanation
-If the players leaves the elevator, they can no longer move into a different level.
+
+When the player leaves the elevator's interior control panel area, they can no longer use `InteractableDoor` to travel to another level.
+
 ```text
 SET InteractableDoor.CanInteract = false
 ```
